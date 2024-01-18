@@ -1,0 +1,126 @@
+<html>
+  <head> </head>
+
+  <body>
+    <script>
+      class MarkovChain {
+        constructor(history) {
+          this.transitions = {};
+
+          // Build the Markov Chain transitions
+          for (let i = 0; i < history.length - 1; i++) {
+            const currentState = history[i];
+            const nextState = history[i + 1];
+
+            if (!this.transitions[currentState]) {
+              this.transitions[currentState] = {};
+            }
+
+            if (!this.transitions[currentState][nextState]) {
+              this.transitions[currentState][nextState] = 1;
+            } else {
+              this.transitions[currentState][nextState]++;
+            }
+          }
+
+          // Normalize transition probabilities
+          this.normalizeTransitions();
+        }
+
+        normalizeTransitions() {
+          for (const state in this.transitions) {
+            const totalTransitions = Object.values(
+              this.transitions[state]
+            ).reduce((acc, count) => acc + count, 0);
+
+            for (const nextState in this.transitions[state]) {
+              this.transitions[state][nextState] /= totalTransitions;
+            }
+          }
+        }
+
+        predictNextPage(...pages) {
+          const currentState = pages.slice(-1)[0];
+          const prevState = pages.length > 1 ? pages[pages.length - 2] : null;
+
+          const possibleNextPages = this.transitions[prevState || currentState];
+
+          if (!possibleNextPages) {
+            console.log(`No prediction for ${currentState}`);
+            return;
+          }
+
+          const nextPageOptions = Object.entries(possibleNextPages);
+          const nextPage = this.selectNextPage(nextPageOptions);
+
+          console.log(
+            "Possible next pages:",
+            nextPageOptions.map(([page]) => page)
+          );
+          console.log(`Predicted next page: ${nextPage}`);
+        }
+
+        selectNextPage(nextPageOptions) {
+          const randomValue = Math.random();
+          let cumulativeProbability = 0;
+
+          for (const [nextPage, probability] of nextPageOptions) {
+            cumulativeProbability += probability;
+
+            if (randomValue <= cumulativeProbability) {
+              return nextPage;
+            }
+          }
+
+          // Fallback to the last option (should not reach here, just in case)
+          return nextPageOptions[nextPageOptions.length - 1][0];
+        }
+
+        printChain() {
+          console.log("Markov Chain Transition Probabilities:\n");
+
+          for (const state in this.transitions) {
+            console.log(`From ${state}:`);
+            for (const nextState in this.transitions[state]) {
+              const probability = this.transitions[state][nextState];
+              console.log(
+                `  - To ${nextState} with probability ${probability}`
+              );
+            }
+            console.log("\n");
+          }
+        }
+      }
+
+      // Example usage
+      const userHistory = [
+        "A",
+        "B",
+        "A",
+        "C",
+        "D",
+        "A",
+        "B",
+        "A",
+        "D",
+        "A",
+        "B",
+        "D",
+        "E",
+      ];
+      const markovChain = new MarkovChain(userHistory);
+
+      // Predict the next page based on the current page
+      markovChain.predictNextPage("A");
+      markovChain.predictNextPage("B");
+      markovChain.predictNextPage("D");
+
+      // Predict the next page based on the last two pages
+      markovChain.predictNextPage("B", "D");
+      markovChain.predictNextPage("A", "B");
+
+      // Print the Markov Chain
+      markovChain.printChain();
+    </script>
+  </body>
+</html>

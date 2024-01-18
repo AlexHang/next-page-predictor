@@ -1,0 +1,113 @@
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+  </head>
+
+  <body>
+    <ul>
+      <li onclick="handlePageClick(0)">Home</li>
+      <li onclick="handlePageClick(1)">About</li>
+      <li onclick="handlePageClick(2)">Stock Data</li>
+      <li onclick="handlePageClick(3)">Transactions</li>
+      <li onclick="handlePageClick(4)">Risk Management</li>
+      <li onclick="handlePageClick(5)">New Trade</li>
+      <li onclick="handlePageClick(6)">Blotter</li>
+    </ul>
+    <h1 id="result"></h1>
+
+    <script>
+      const pageMapper = {
+        0: "Home",
+        1: "About",
+        2: "Stock Data",
+        3: "Transactions",
+        4: "Risk Management",
+        5: "New Trade",
+        6: "Blotter",
+      };
+
+      const model = tf.sequential();
+      const userHistory = [];
+      const maxInputShape = 10;
+
+      const handlePageClick = (pageId) => {
+        userHistory.push(pageId);
+        predictNextvalue();
+      };
+
+      const getTrainingData = (userHistory) => {
+        const rawTrainingData = userHistory.slice(0, -2).map((_, i) => {
+          const slice = userHistory.slice(i, i + 3);
+          return { previous: slice.slice(0, 2), next: slice[2] };
+        });
+
+        const X_data = rawTrainingData.map((el) => el.previous);
+        const Y_data = rawTrainingData.map((el) => el.next);
+        console.log(X_data, Y_data);
+        return { X_data, Y_data };
+      };
+
+      const predictNextvalue = () => {
+        const { X_data, Y_data } = getTrainingData(userHistory);
+
+        if (X_data.length < 3) return;
+
+        const X = tf.tensor2d(X_data);
+        const y = tf.tensor1d(Y_data);
+
+        // Define and train the linear regression model
+        model.add(tf.layers.dense({ units: 1, inputShape: [2] }));
+        model.compile({ loss: "meanSquaredError", optimizer: "sgd" });
+        model.fit(X, y, { epochs: 100 }).then(() => {
+          const last2Entries = userHistory.slice(-2);
+          // Predict the next value
+          const currentPage = userHistory.slice(-1);
+          const nextTimeStep = tf.tensor2d(last2Entries, [1, 2]);
+          const predictedValue = model.predict(nextTimeStep).dataSync()[0];
+
+          const roundedPredictedValue = roundPageNumber(
+            predictedValue,
+            currentPage
+          );
+
+          console.log("Next predicted value:", predictedValue);
+          document.querySelector("#result").innerHTML = `
+		  CurrentPage: ${pageMapper[Math.round(currentPage)]}
+		  <br>
+		  Next predicted page:  ${pageMapper[roundedPredictedValue]}
+		  <br>
+		  Most accessed page: ${pageMapper[getMostAccessedPage(userHistory)]}
+		  `;
+        });
+      };
+
+      const roundPageNumber = (predictedPage, currentPage) => {
+        const rounded = Math.round(predictedPage);
+        const fractionaryPart = predictedPage - rounded;
+
+        if (rounded === currentPage[0]) {
+          if (rounded === Math.floor(predictedPage)) {
+            return Math.ceil(predictedPage);
+          } else {
+            return Math.floor(predictedPage);
+          }
+        }
+        return rounded;
+      };
+
+      const getMostAccessedPage = (userHistory) => {
+        const counts = userHistory.reduce((acc, val) => {
+          acc[val] = (acc[val] || 0) + 1;
+          return acc;
+        }, {});
+
+        const maxCount = Math.max(...Object.values(counts));
+        const mostFrequent = Object.entries(counts)
+          .filter(([key, val]) => val === maxCount)
+          .map(([key]) => key);
+        return mostFrequent[0];
+      };
+
+    </script>
+  </body>
+</html>

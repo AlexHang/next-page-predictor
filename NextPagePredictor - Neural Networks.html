@@ -1,0 +1,195 @@
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      .column {
+        float: left;
+        padding: 10px;
+        height: 95vh;
+      }
+
+      .left,
+      .right {
+        width: 25%;
+      }
+
+      .middle {
+        width: 50%;
+      }
+
+      /* Clear floats after the columns */
+      .row:after {
+        content: "";
+        display: table;
+        clear: both;
+      }
+
+      .nav-item {
+        margin: 0px;
+        background-color: cornsilk;
+        list-style-type: none;
+        cursor: pointer;
+        padding: 8px;
+        width: 100%;
+      }
+
+      .nav-item:hover {
+        background-color: darkgray;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="row">
+      <div class="column left" style="background-color: #aaa">
+        <ul>
+          <li class="nav-item" onclick="handlePageClick('Home')">Home</li>
+          <li class="nav-item" onclick="handlePageClick('About')">About</li>
+          <li class="nav-item" onclick="handlePageClick('StockData')">
+            Stock Data
+          </li>
+          <li class="nav-item" onclick="handlePageClick('Transactions')">
+            Transactions
+          </li>
+          <li class="nav-item" onclick="handlePageClick('RiskManagement')">
+            Risk Management
+          </li>
+          <li class="nav-item" onclick="handlePageClick('NewTrade')">
+            New Trade
+          </li>
+          <li class="nav-item" onclick="handlePageClick('Blotter')">Blotter</li>
+        </ul>
+      </div>
+      <div class="column middle" style="background-color: #bbb">
+        <h2 id="currentPage"></h2>
+        
+      </div>
+      <div class="column right" style="background-color: #ccc">
+        <h4 id="result">
+          Top prediction: <span id="top-prediction"></span>
+          <br>
+          Second prediction: <span id="secondary-prediction"></span>
+        </h4>
+      </div>
+    </div>
+
+    <script>
+      let model;
+      let uniquePages;
+      let pageIndexMap;
+      let userPageMatrix;
+      let currentPage;
+
+      const data = [
+        { page: "About" },
+        { page: "Home" },
+        { page: "StockData" },
+        { page: "RiskManagement" },
+        { page: "NewTrade" },
+        { page: "Transactions" },
+        { page: "Blotter" },
+        { page: "Home" },
+        { page: "StockData" },
+        { page: "Blotter" },
+      ];
+
+      function handlePageClick(page) {
+        data.push(page);
+        currentPage = page;
+        document.getElementById('currentPage').innerText = currentPage;
+        trainAndRunModel();
+      }
+
+      function transformData() {
+        uniquePages = Array.from(new Set(data.map((entry) => entry.page)));
+
+        pageIndexMap = new Map(uniquePages.map((page, index) => [page, index]));
+
+        userPageMatrix = tf.zeros([1, uniquePages.length]);
+        data.forEach((entry) => {
+          const pageIndex = pageIndexMap.get(entry.page);
+          userPageMatrix.add(
+            tf
+              .oneHot(0, uniquePages.length)
+              .mul(tf.oneHot(pageIndex, uniquePages.length))
+          );
+        });
+      }
+
+      function initModel() {
+        model = tf.sequential({
+          layers: [
+            tf.layers.dense({
+              units: 8,
+              inputShape: [uniquePages.length],
+              activation: "relu",
+            }),
+            tf.layers.dense({
+              units: uniquePages.length,
+              activation: "softmax",
+            }),
+          ],
+        });
+        model.compile({
+          optimizer: "adam",
+          loss: "categoricalCrossentropy",
+          metrics: ["accuracy"],
+        });
+      }
+
+      async function trainModel() {
+        // Train the model
+        const labels = userPageMatrix;
+        const epochs = 100;
+        const batchSize = 2;
+        await model.fit(userPageMatrix, labels, {
+          epochs: epochs,
+          batchSize: batchSize,
+        });
+      }
+
+      function createEmptyTensorOfSize(x) {
+        return tf.tensor2d([[1, ...new Array(x - 1).fill(0)]]);
+      }
+
+      function predictPage() {
+        const userHistory = createEmptyTensorOfSize(uniquePages.length);
+        const predictions = model.predict(userHistory);
+        predictions.print();
+        const nextPageIndex = predictions.argMax(1).dataSync()[0];
+        printPredictions(predictions);
+      }
+
+      async function printPredictions(predictions) {
+        // const nextPageIndex = predictions.argMax(1).dataSync()[0];
+        // const nextPage = Array.from(pageIndexMap.keys())[nextPageIndex];
+        const possibilitiesArray = Array.from(predictions.dataSync());
+        const probabilitiesPerPage = possibilitiesArray.map((el, index) => ({
+          pageName: uniquePages[index],
+          possibility: el,
+        }));
+
+        probabilitiesPerPage.sort((a, b) => b.possibility - a.possibility);
+        let topResults = probabilitiesPerPage.filter(page=> (page.pageName && page.pageName !== currentPage)).slice(0, 2);
+        console.log(probabilitiesPerPage);
+        console.log(topResults);
+        document.getElementById("top-prediction").innerText = topResults[0].pageName;
+        document.getElementById("secondary-prediction").innerText = topResults[1].pageName;
+      }
+
+      function trainAndRunModel() {
+        transformData();
+        initModel();
+        trainModel().then(() => {
+          predictPage();
+        });
+      }
+
+      trainAndRunModel();
+    </script>
+  </body>
+</html>
